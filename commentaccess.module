@@ -54,9 +54,6 @@ function commentaccess_menu_alter(&$items) {
  */
 function commentaccess_permission() {
   $perms = array(
-    'skip commentaccess approval' => array(
-      'title' => t('Skip comment approval by node author'),
-    ),
     'administer comments on own content' => array(
       'title' => t('Administer comments on own content'),
       'description' => t('For all content types a user can create.'),
@@ -345,7 +342,7 @@ function commentaccess_access_check($comment, $op = '') {
       if ($node->uid == $user->uid) {
         return FALSE;
       }
-      elseif (user_access('skip commentaccess approval')) {
+      elseif (user_access('skip comment approval')) {
         return FALSE;
       }
       else {
