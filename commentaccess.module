@@ -237,6 +237,15 @@ function commentaccess_form_alter(&$form, $form_state, $form_id) {
 /*
  * Implementation of hook_form_FORM_ID_alter().
  *
+ * Bypasses comment.module to enable the custom approval queue message.
+ */
+function commentaccess_form_comment_form_alter(&$form, &$form_state) {
+  $form['actions']['submit']['#submit'] = array('commentaccess_form_submit');
+}
+
+/*
+ * Implementation of hook_form_FORM_ID_alter().
+ *
  * Adds options to the user edit form.
  */
 function commentaccess_form_user_profile_form_alter(&$form, &$form_state) {
@@ -379,6 +388,52 @@ function commentaccess_requires_approval($type, $owner = 0) {
   else { // Didn't get a valid user object
     return FALSE;
   }
+}
+
+/**
+ * Modification of comment_form_submit()
+ *
+ * The only change is in the approval queue if block. If a comment saves
+ * as unpublished, the message is set in commentaccess_comment_presave().
+ */
+function commentaccess_form_submit($form, &$form_state) {
+  $node = node_load($form_state['values']['nid']);
+  $comment = comment_form_submit_build_comment($form, $form_state);
+  if (user_access('post comments') && (user_access('administer comments') || $node->comment == COMMENT_NODE_OPEN)) {
+    // Save the anonymous user information to a cookie for reuse.
+    if (!$comment->uid) {
+      user_cookie_save(array_intersect_key($form_state['values'], array_flip(array('name', 'mail', 'homepage'))));
+    }
+
+    comment_save($comment);
+    $form_state['values']['cid'] = $comment->cid;
+
+    // Add an entry to the watchdog log.
+    watchdog('content', 'Comment posted: %subject.', array('%subject' => $comment->subject), WATCHDOG_NOTICE, l(t('view'), 'comment/' . $comment->cid, array('fragment' => 'comment-' . $comment->cid)));
+
+    // Here is the modified block
+    if ($comment->status == COMMENT_PUBLISHED) {
+      drupal_set_message(t('Your comment has been posted.'));
+    }
+    $query = array();
+    // Find the current display page for this comment.
+    $page = comment_get_display_page($comment->cid, $node->type);
+    if ($page > 0) {
+      $query['page'] = $page;
+    }
+    // Redirect to the newly posted comment.
+    $redirect = array('node/' . $node->nid, array('query' => $query, 'fragment' => 'comment-' . $comment->cid));
+  }
+  else {
+    watchdog('content', 'Comment: unauthorized comment submitted or comment submitted to a closed post %subject.', array('%subject' => $comment->subject), WATCHDOG_WARNING);
+    drupal_set_message(t('Comment: unauthorized comment submitted or comment submitted to a closed post %subject.', array('%subject' => $comment->subject)), 'error');
+    // Redirect the user to the node they are commenting on.
+    $redirect = 'node/' . $node->nid;
+  }
+  $form_state['redirect'] = $redirect;
+  // Clear the block and page caches so that anonymous users see the comment
+  // they have posted.
+  cache_clear_all();
 }
 
 /**
