@@ -53,23 +53,23 @@ function commentaccess_menu_alter(&$items) {
  * @return array $perms
  */
 function commentaccess_permission() {
-  $perms = array(
-    'administer comments on own content' => array(
-      'title' => t('Administer comments on own content'),
-      'description' => t('For all content types a user can create.'),
-    ),
-  );
+  $perms = array();
 
   foreach (node_type_get_types() as $node) {
     $type = check_plain($node->type);
     $perms += array(
-      "delete comments on own $type" => array(
-        'title' => t('%type: Delete comments on own content', array('%type' => $node->name)),
+      "administer comments on own $type" => array(
+        'title' => t('%type: Administer comments on own content', array('%type' => $node->name)),
       ),
     );
     $perms += array(
       "approve comments on own $type" => array(
         'title' => t('%type: Approve comments on own content', array('%type' => $node->name)),
+      ),
+    );
+    $perms += array(
+      "delete comments on own $type" => array(
+        'title' => t('%type: Delete comments on own content', array('%type' => $node->name)),
       ),
     );
   }
@@ -160,7 +160,7 @@ function commentaccess_node_view($node, $view_mode) {
   // Only add to full node views for users without 'administer comments'
   if ($node->comment && $view_mode == 'full' && node_is_page($node) && empty($node->in_preview) && !user_access('administer comments')) {
     global $user;
-    if ($node->uid == $user->uid && (user_access("approve comments on own $node->type") || user_access('administer comments on own content'))) {
+    if ($node->uid == $user->uid && (user_access("approve comments on own $node->type") || user_access("administer comments on own $node->type"))) {
       // Adapted from comment_node_page_additions().
       $additions = array();
       $mode = variable_get('comment_default_mode_' . $node->type, COMMENT_MODE_THREADED);
@@ -227,10 +227,13 @@ function commentaccess_node_view($node, $view_mode) {
  * Adds the comment administration fields to the node edit form.
  */
 function commentaccess_form_alter(&$form, $form_state, $form_id) {
-  global $user;
+  if (isset($form['type']) && isset($form['#node'])) {
+    global $user;
+    $type = $form['type']['#value'];
 
-  if (isset($form['type']) && isset($form['#node']) && $form['type']['#value'] .'_node_form' == $form_id) {
-    $form['comment_settings']['#access'] |= ($user->uid == $form['#node']->uid && user_access('administer comments on own content'));
+    if($type .'_node_form' == $form_id) {
+      $form['comment_settings']['#access'] |= ($user->uid == $form['#node']->uid && user_access("administer comments on own $type"));
+    }
   }
 }
 
@@ -256,7 +259,7 @@ function commentaccess_form_user_profile_form_alter(&$form, &$form_state) {
     foreach (node_type_get_types() as $node) {
       $type = $node->type;
       if (node_access('create', $type)) {
-        if (user_access("approve comments on own $type") || user_access('administer comments on own content')) {
+        if (user_access("approve comments on own $type") || user_access("administer comments on own $type")) {
           $form['commentaccess_settings']["commentaccess_skip_$type"] = array(
             '#type' => 'checkbox',
             '#title' => t("$node->name: skip comment approvals"),
@@ -321,10 +324,10 @@ function commentaccess_access_check($comment, $op = '') {
       if (user_access('administer comments')) {
         return TRUE;
       }
-      elseif (user_access('administer comments on own content') && ($user->uid == $node->uid)) {
+      elseif (user_access("administer comments on own $node->type") && ($user->uid == $node->uid)) {
         return TRUE;
       }
-      elseif (user_access('delete comments on own ' . $node->type) && ($user->uid == $node->uid)) {
+      elseif (user_access("delete comments on own $node->type") && ($user->uid == $node->uid)) {
         return TRUE;
       }
       break;
@@ -337,10 +340,10 @@ function commentaccess_access_check($comment, $op = '') {
         if (user_access('administer comments')) {
           return TRUE;
         }
-        elseif (user_access('administer comments on own content') && ($user->uid == $node->uid)) {
+        elseif (user_access("administer comments on own $node->type") && ($user->uid == $node->uid)) {
           return TRUE;
         }
-        elseif (user_access('approve comments on own '. $node->type) && ($user->uid == $node->uid)) {
+        elseif (user_access("approve comments on own $node->type") && ($user->uid == $node->uid)) {
           return TRUE;
         }
       }
