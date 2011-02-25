@@ -1,4 +1,3 @@
-; $Id$
 name = "Comment Access"
 description = "Provides additional permissions for comments."
 core = 7.x
