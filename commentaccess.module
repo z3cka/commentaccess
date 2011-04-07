@@ -26,7 +26,7 @@ function commentaccess_help($path, $arg) {
 function commentaccess_menu() {
   $items = array();
   $items['admin/content/comment/commentaccess'] = array(
-    'title' => 'Approval options',
+    'title' => 'Comment access',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('commentaccess_admin_settings'),
     'file' => 'commentaccess.admin.inc',
@@ -262,7 +262,7 @@ function commentaccess_form_user_profile_form_alter(&$form, &$form_state) {
           $form['commentaccess_settings']["commentaccess_skip_$type"] = array(
             '#type' => 'checkbox',
             '#title' => t("$node->name: skip comment approvals"),
-            '#default_value' => isset($account->data["commentaccess_skip_$type"]) ? $account->data["commentaccess_skip_$type"] : 1,
+            '#default_value' => isset($account->data["commentaccess_skip_$type"]) ? $account->data["commentaccess_skip_$type"] : variable_get('commentaccess_approval_default', 1),
             '#description' => t('Check this to allow other people to comment on your posts without approval (Administrators may always comment without approval).'),
           );
         }
@@ -280,7 +280,7 @@ function commentaccess_form_user_profile_form_alter(&$form, &$form_state) {
       $form['commentaccess_settings']['commentaccess_email'] = array(
         '#type'          => 'checkbox',
         '#title'         => t('Receive e-mail notifications'),
-        '#default_value' => isset($account->data['commentaccess_email']) ? $account->data['commentaccess_email'] : 1,
+        '#default_value' => isset($account->data['commentaccess_email']) ? $account->data['commentaccess_email'] : variable_get('commentaccess_mail_default', 0),
         '#description'   => t('Check this to receive e-mail notifications when new comments need your approval.'),
       );
     }

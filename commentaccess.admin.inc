@@ -11,6 +11,24 @@
  */
 function commentaccess_admin_settings() {
   $form = array();
+  $form['commentaccess_defaults'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Default settings'),
+  );
+  $form['commentaccess_defaults']['commentaccess_approval_default'] = array(
+    '#type' => 'radios',
+    '#title' => t('Require comment approval by default'),
+    '#options' => array(1 => t('Disabled'), 0 => t('Enabled')),
+    '#description' => t('This sets the default on the user account form. When disabled your node authors will skip comment approvals by default. Enabling this may lead to legitimate comments not getting published, if your node authors are not aware of this feature.'),
+    '#default_value' => variable_get('commentaccess_approval_default', 1),
+  );
+  $form['commentaccess_defaults']['commentaccess_mail_default'] = array(
+    '#type' => 'radios',
+    '#title' => t('Send e-mail approval notices by default'),
+    '#options' => array(0 => t('Disabled'), 1 => t('Enabled')),
+    '#description' => t('This sets the default on the user account form. When disabled node authors must opt-in to receive an e-mail when comments need approval. <em>Warning: Enabling this may upset users who are not aware of this setting.</em>'),
+    '#default_value' => variable_get('commentaccess_mail_default', 0),
+  );	 
   $form['commentaccess_text'] = array(
     '#type' => 'fieldset',
     '#title' => t('Text options'),
