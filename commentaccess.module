@@ -106,19 +106,21 @@ function commentaccess_comment_presave($comment) {
 
     // Send the mail if enabled
     $nodeauthor = user_load($node->uid);
-    if ($nodeauthor->data['commentaccess_email']) {
-      $replacements = array(
-        '@approver' => $node->name,
-        '@subject' => $comment->subject,
-        '@comment' => $comment->comment,
-        '@commenter' => (!empty($comment->name)) ? $comment->name : variable_get('anonymous', 'anonymous'),
-        '@nodelink' => url('node/'. $node->nid, array('absolute' => TRUE)),
-        '@commentlink' => url('node/'. $node->nid, array('absolute' => TRUE, 'fragment' => 'comment-'. $comment->cid)),
-        '@site' => variable_get("site_name", "Drupal"),
-        '@siteurl' => $GLOBALS["base_url"],
-      );
-      $params = array('replacements' => $replacements);
-      drupal_mail('commentaccess', 'commentaccess_email', $nodeauthor->mail, user_preferred_language($nodeauthor), $params);
+    if (array_key_exists('commentaccess_email', $nodeauthor->data)) {
+      if ($nodeauthor->data['commentaccess_email']) {
+        $replacements = array(
+          '@approver' => $node->name,
+          '@subject' => $comment->subject,
+          '@comment' => $comment->comment,
+          '@commenter' => (!empty($comment->name)) ? $comment->name : variable_get('anonymous', 'anonymous'),
+          '@nodelink' => url('node/'. $node->nid, array('absolute' => TRUE)),
+          '@commentlink' => url('node/'. $node->nid, array('absolute' => TRUE, 'fragment' => 'comment-'. $comment->cid)),
+          '@site' => variable_get("site_name", "Drupal"),
+          '@siteurl' => $GLOBALS["base_url"],
+        );
+        $params = array('replacements' => $replacements);
+        drupal_mail('commentaccess', 'commentaccess_email', $nodeauthor->mail, user_preferred_language($nodeauthor), $params);
+      }
     }
   }
 }
@@ -377,9 +379,10 @@ function commentaccess_access_check($comment, $op = '') {
  * @return bool - TRUE if comments require approval, FALSE if not
  */
 function commentaccess_requires_approval($type, $owner = 0) {
-  // Make sure we have a valid user object for node author
-  if (is_object($owner) && $owner->uid) {
-    $skip_approval_field = "commentaccess_skip_{$type}";
+  $skip_approval_field = "commentaccess_skip_{$type}";
+
+  // Check for valid object for node author and variables initialized
+  if ((is_object($owner) && $owner->uid) && (array_key_exists($skip_approval_field, $owner->data))) {
     if ($owner->data["$skip_approval_field"] == 1 ) {
       return FALSE;
     }
@@ -387,7 +390,7 @@ function commentaccess_requires_approval($type, $owner = 0) {
       return TRUE;  // node author enabled their approval queue
     }
   }
-  else { // Didn't get a valid user object
+  else { // Didn't get a valid user object or user variables not initialized
     return FALSE;
   }
 }
