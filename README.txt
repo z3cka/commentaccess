@@ -15,7 +15,7 @@ Installation
 1. Copy the commentaccess directory and its contents to the Drupal modules directory, probably /sites/all/modules/.
 2. Enable the module in the modules administration page.
 3. Enable the appropriate permissions on the people administration page, on the permissions tab.
-4. Update the default approval email on the usercomment admin page /admin/content/comments/commentaccess.
+4. Update the default approval email on the usercomment admin page /admin/config/content/commentaccess.
 
 ---------------------------
 Upgrading from User Comment

@@ -25,7 +25,7 @@ function commentaccess_help($path, $arg) {
  */
 function commentaccess_menu() {
   $items = array();
-  $items['admin/content/comment/commentaccess'] = array(
+  $items['admin/config/content/commentaccess'] = array(
     'title' => 'Comment access',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('commentaccess_admin_settings'),
