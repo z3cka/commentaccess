@@ -83,9 +83,10 @@ function commentaccess_permission() {
  * optionally sends the e-mail notification to nodeauthor.
  */
 function commentaccess_comment_presave($comment) {
-  if (commentaccess_access_check($comment, 'comment')) {
-    $node = node_load($comment->nid);
+  $node = node_load($comment->nid);
+  $nodeauthor = user_load($node->uid);
 
+  if (commentaccess_access_check($comment, 'comment')) {
     // Set the comment to an unpublished state
     $comment->status = COMMENT_NOT_PUBLISHED;
 
@@ -105,7 +106,6 @@ function commentaccess_comment_presave($comment) {
     drupal_set_message($status_msg);
 
     // Send the mail if enabled
-    $nodeauthor = user_load($node->uid);
     if (array_key_exists('commentaccess_email', $nodeauthor->data)) {
       if ($nodeauthor->data['commentaccess_email']) {
         $replacements = array(
@@ -123,6 +123,12 @@ function commentaccess_comment_presave($comment) {
       }
     }
   }
+  else { // commentaccess_access_check returned false
+    // Publish if node author has access permissions and skip approval checked
+    if (commentaccess_requires_approval($node->type, $nodeauthor) == FALSE) {
+      $comment->status = COMMENT_PUBLISHED;
+    }
+  }     
 }
 
 /**
@@ -382,8 +388,13 @@ function commentaccess_requires_approval($type, $owner = 0) {
   $skip_approval_field = "commentaccess_skip_{$type}";
 
   // Check for valid object for node author and variables initialized
-  if ((is_object($owner) && $owner->uid) && (array_key_exists($skip_approval_field, $owner->data))) {
-    if ($owner->data["$skip_approval_field"] == 1 ) {
+  if (is_object($owner) && $owner->uid){
+    // If the user has not edited their profile, use the module defaults
+    if (empty($owner->data)) {
+      return FALSE;
+    }
+    // Skip if the user has checked skip
+    elseif (array_key_exists($skip_approval_field, $owner->data) && $owner->data["$skip_approval_field"] == 1 ) {
       return FALSE;
     }
     else {
