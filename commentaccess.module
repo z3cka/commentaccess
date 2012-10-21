@@ -83,10 +83,17 @@ function commentaccess_permission() {
  * optionally sends the e-mail notification to nodeauthor.
  */
 function commentaccess_comment_presave($comment) {
-  $node = node_load($comment->nid);
-  $nodeauthor = user_load($node->uid);
+  // Check if the comment needs approval.
+  $requires_approval = commentaccess_requires_approval($comment);
+  if ($requires_approval === NULL) {
+    // Do nothing.
+    return;
+  }
 
-  if (commentaccess_access_check($comment, 'comment')) {
+  if ($requires_approval) {
+    $node = node_load($comment->nid);
+    $nodeauthor = user_load($node->uid);
+
     // Set the comment to an unpublished state
     $comment->status = COMMENT_NOT_PUBLISHED;
 
@@ -106,26 +113,26 @@ function commentaccess_comment_presave($comment) {
     drupal_set_message($status_msg);
 
     // Send the mail if enabled
-    if (array_key_exists('commentaccess_email', $nodeauthor->data)) {
-      if ($nodeauthor->data['commentaccess_email']) {
-        $replacements = array(
-          '@approver' => $node->name,
-          '@subject' => $comment->subject,
-          '@comment' => $comment->comment,
-          '@commenter' => (!empty($comment->name)) ? $comment->name : variable_get('anonymous', 'anonymous'),
-          '@nodelink' => url('node/'. $node->nid, array('absolute' => TRUE)),
-          '@commentlink' => url('node/'. $node->nid, array('absolute' => TRUE, 'fragment' => 'comment-'. $comment->cid)),
-          '@site' => variable_get("site_name", "Drupal"),
-          '@siteurl' => $GLOBALS["base_url"],
-        );
-        $params = array('replacements' => $replacements);
-        drupal_mail('commentaccess', 'commentaccess_email', $nodeauthor->mail, user_preferred_language($nodeauthor), $params);
-      }
+    $commentaccess_settings = _commentaccess_get_account_settings($nodeauthor);
+
+    if ($commentaccess_settings['commentaccess_email']) {
+      $replacements = array(
+        '@approver' => $node->name,
+        '@subject' => $comment->subject,
+        '@comment' => $comment->comment,
+        '@commenter' => (!empty($comment->name)) ? $comment->name : variable_get('anonymous', 'anonymous'),
+        '@nodelink' => url('node/'. $node->nid, array('absolute' => TRUE)),
+        '@commentlink' => url('node/'. $node->nid, array('absolute' => TRUE, 'fragment' => 'comment-'. $comment->cid)),
+        '@site' => variable_get("site_name", "Drupal"),
+        '@siteurl' => $GLOBALS["base_url"],
+      );
+      $params = array('replacements' => $replacements);
+      drupal_mail('commentaccess', 'commentaccess_email', $nodeauthor->mail, user_preferred_language($nodeauthor), $params);
     }
   }
   else { // commentaccess_access_check returned false
     // Publish if node author has access permissions and skip approval checked
-    if (commentaccess_requires_approval($node->type, $nodeauthor) == FALSE) {
+    if (commentaccess_requires_approval($comment) == FALSE) {
       $comment->status = COMMENT_PUBLISHED;
     }
   }     
@@ -262,6 +269,9 @@ function commentaccess_form_user_profile_form_alter(&$form, &$form_state) {
   if ($form['#user_category'] == 'account') {
     $account = $form['#user'];
 
+    // Gets the current commentaccess settings for the user.
+    $commentaccess_settings = _commentaccess_get_account_settings($account);
+
     // Iterate through node types, add checkbox if user has access
     foreach (node_type_get_types() as $node) {
       $type = $node->type;
@@ -270,7 +280,7 @@ function commentaccess_form_user_profile_form_alter(&$form, &$form_state) {
           $form['commentaccess_settings']["commentaccess_skip_$type"] = array(
             '#type' => 'checkbox',
             '#title' => t("$node->name: skip comment approvals"),
-            '#default_value' => isset($account->data["commentaccess_skip_$type"]) ? $account->data["commentaccess_skip_$type"] : variable_get('commentaccess_approval_default', 1),
+            '#default_value' => $commentaccess_settings["commentaccess_skip_$type"],
             '#description' => t('Check this to allow other people to comment on your posts without approval (Administrators may always comment without approval).'),
           );
         }
@@ -278,21 +288,57 @@ function commentaccess_form_user_profile_form_alter(&$form, &$form_state) {
     }
     // If user has options, wrap them in a fieldset and provide e-mail option
     if (!empty($form['commentaccess_settings'])) {
-      $commentaccess_settings = array(
+      $commentaccess_settings_fieldset = array(
         '#type'        => 'fieldset',
         '#title'       => t('Comment Access Settings'),
         '#weight'      => 5,
         '#collapsible' => TRUE,
       );
-      $form['commentaccess_settings'] = array_merge($form['commentaccess_settings'], $commentaccess_settings);
+      $form['commentaccess_settings'] = array_merge($form['commentaccess_settings'], $commentaccess_settings_fieldset);
       $form['commentaccess_settings']['commentaccess_email'] = array(
         '#type'          => 'checkbox',
         '#title'         => t('Receive e-mail notifications'),
-        '#default_value' => isset($account->data['commentaccess_email']) ? $account->data['commentaccess_email'] : variable_get('commentaccess_mail_default', 0),
+        '#default_value' => $commentaccess_settings["commentaccess_email"],
         '#description'   => t('Check this to receive e-mail notifications when new comments need your approval.'),
       );
     }
   }
+}
+
+/**
+ * Returns the current commentaccess settings for the specified account.
+ *
+ * @param stdClass $account
+ *   The account to return the commentaccess settings for.
+ *
+ * @return array
+ *   The settings in an array with the following structure:
+ *   - commentaccess_email
+ *   - commentaccess_skip_{NODE_TYPE}
+ */
+function _commentaccess_get_account_settings($account) {
+  $settings = array();
+
+  if (isset($account->data['commentaccess_email'])) {
+    $settings['commentaccess_email'] = $account->data['commentaccess_email'];
+  }
+  else {
+    $settings['commentaccess_email'] = variable_get('commentaccess_mail_default', 0);
+  }
+
+  foreach (node_type_get_types() as $node) {
+    $type = $node->type;
+    $skip_approval_field = "commentaccess_skip_$type";
+
+    if (isset($account->data[$skip_approval_field])) {
+      $settings[$skip_approval_field] = $account->data[$skip_approval_field];
+    }
+    else {
+      $settings[$skip_approval_field] = variable_get('commentaccess_approval_default', 1);
+    }
+  }
+
+  return $settings;
 }
 
 /**
@@ -313,7 +359,7 @@ function commentaccess_user_presave(&$edit, $account, $category) {
 /**
  * This function checks comment access permissions.
  * @param object $comment The object to check
- * @param string $op delete, approve or comment
+ * @param string $op delete, approve
  * @return booleen TRUE or FALSE dependent from the $op
  */
 function commentaccess_access_check($comment, $op = '') {
@@ -356,53 +402,65 @@ function commentaccess_access_check($comment, $op = '') {
       }
       break;
 
-    case 'comment':
-      // True if the comment needs approval
-      if ($node->uid == $user->uid) {
-        return FALSE;
-      }
-      elseif (user_access('skip comment approval')) {
-        return FALSE;
-      }
-      else {
-        // Check if the node author wants to skip approvals
-        $owner = user_load($node->uid);
-        return commentaccess_requires_approval($node->type, $owner);
-      }
-      break;
-
     default:
       return FALSE;
   }// end switch $op
 }
 
 /**
- * Determines if a node author wants to skip comment approvals
+ * Returns TRUE if the comment requires approval by the node owner.
  *
- * @param string $type - The name of the node type
- * @param object $owner - The author of the node
+ * @param object $comment - The comment.
  *
- * @return bool - TRUE if comments require approval, FALSE if not
+ * @return bool
+ *   TRUE if the comment require approval, FALSE if not. NULL if the node owner
+ * has no administer/approval access. In this case, the general comment access
+ * rules are used.
  */
-function commentaccess_requires_approval($type, $owner = 0) {
-  $skip_approval_field = "commentaccess_skip_{$type}";
+function commentaccess_requires_approval($comment) {
+  // Check if the comment is a node comment.
+  if (empty($comment->nid)) {
+    return NULL;
+  }
+  $node = node_load($comment->nid);
+  if (empty($node)) {
+    return NULL;
+  }
 
-  // Check for valid object for node author and variables initialized
-  if (is_object($owner) && $owner->uid){
-    // If the user has not edited their profile, use the module defaults
-    if (empty($owner->data)) {
-      return FALSE;
-    }
-    // Skip if the user has checked skip
-    elseif (array_key_exists($skip_approval_field, $owner->data) && $owner->data["$skip_approval_field"] == 1 ) {
-      return FALSE;
+  // Check for known owner.
+  $owner = user_load($node->uid);
+  if (empty($owner)) {
+    // Owner unknown: use general comment rules.
+    return NULL;
+  }
+
+  // Check if the owner has administer or approval access for this node type.
+  if (!user_access('administer comments on own ' . $node->type, $owner) &&
+    !user_access('approve comments on own ' . $node->type, $owner)) {
+    // No access: use general comment rules.
+    return NULL;
+  }
+
+  global $user;
+  if ($owner->uid == $user->uid) {
+    // Node owner is comment owner: no approval needed.
+    return FALSE;
+  }
+  elseif (user_access('skip comment approval')) {
+    // User bypasses approval.
+    return FALSE;
+  }
+  else {
+    // Check if the node author wants to skip approvals.
+    if (!empty($owner)) {
+      $skip_approval_field = "commentaccess_skip_" . $node->type;
+
+      $commentaccess_settings = _commentaccess_get_account_settings($owner);
+      return empty($commentaccess_settings[$skip_approval_field]);
     }
     else {
-      return TRUE;  // node author enabled their approval queue
+      return FALSE;
     }
-  }
-  else { // Didn't get a valid user object or user variables not initialized
-    return FALSE;
   }
 }
 
