@@ -464,7 +464,7 @@ function commentaccess_mail($key, &$message, $params) {
     $body = variable_get('commentaccess_mail_message', commentaccess_mail_message_default());
     $langcode = isset($message['language']->language) ? $message['language']->language : NULL;
     $message['subject'] = t($subject, $params['replacements'], array('langcode' => $langcode));
-    $message['body'][] = t($body, $params['replacements'], array('langcode' => $langcode)); 
+    $message['body'][] = t($body, $params['replacements'], array('langcode' => $langcode));
   }
 }
 
@@ -472,7 +472,7 @@ function commentaccess_mail($key, &$message, $params) {
  * This function defines the default message sent out by this module
  */
 function commentaccess_mail_message_default() {
-  return 
+  return
 "Hey @approver,
 
 @commenter posted a new comment[1] that needs to be approved.
